@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -30,7 +29,7 @@ type Config struct {
 // loadConfig는 config.ini 파일에서 설정을 로드합니다.
 func loadConfig(filename string) (Config, error) {
 	var cfg Config
-	
+
 	f, err := ini.Load(filename)
 	if err != nil {
 		return cfg, fmt.Errorf("❌ 설정 파일 로드 실패: %w", err)
@@ -53,10 +52,10 @@ func loadConfig(filename string) (Config, error) {
 
 	interval, _ := vault.Key("renewal_interval_seconds").Int()
 	cfg.RenewalIntervalSeconds = time.Duration(interval) * time.Second
-	
+
 	threshold, _ := vault.Key("token_renewal_threshold_percent").Float64()
 	cfg.TokenRenewalThresholdPercent = threshold
-	
+
 	log.Printf("✅ 설정 파일 로드 완료. Vault Addr: %s", cfg.VaultAddr)
 	return cfg, nil
 }
@@ -67,7 +66,7 @@ func loadConfig(filename string) (Config, error) {
 type VaultClient struct {
 	config Config
 	client *api.Client
-	
+
 	currentTokenMetadata *api.Secret
 	secretsCache         map[string]map[string]interface{}
 	stateMutex           sync.RWMutex
@@ -77,19 +76,19 @@ type VaultClient struct {
 func NewVaultClient(cfg Config) (*VaultClient, error) {
 	vaultConfig := api.DefaultConfig()
 	vaultConfig.Address = cfg.VaultAddr
-	
+
 	client, err := api.NewClient(vaultConfig)
 	if err != nil {
 		return nil, fmt.Errorf("Vault 클라이언트 생성 실패: %w", err)
 	}
-	
+
 	if cfg.Namespace != "" {
 		client.SetNamespace(cfg.Namespace)
 	}
 
 	return &VaultClient{
-		config: cfg,
-		client: client,
+		config:       cfg,
+		client:       client,
 		secretsCache: make(map[string]map[string]interface{}),
 	}, nil
 }
@@ -97,9 +96,9 @@ func NewVaultClient(cfg Config) (*VaultClient, error) {
 // authenticate는 AppRole 인증을 수행하고 토큰을 획득합니다.
 func (vc *VaultClient) authenticate() error {
 	log.Println("--- 🔐 Vault AppRole 인증 시작 ---")
-	
+
 	options := map[string]interface{}{
-		"role_id": vc.config.RoleID,
+		"role_id":   vc.config.RoleID,
 		"secret_id": vc.config.SecretID,
 	}
 
@@ -107,7 +106,7 @@ func (vc *VaultClient) authenticate() error {
 	if err != nil {
 		return fmt.Errorf("❌ AppRole 인증 실패: %w", err)
 	}
-	
+
 	if secret == nil || secret.Auth == nil {
 		return fmt.Errorf("❌ AppRole 인증 응답에 Auth 정보가 없음")
 	}
@@ -121,7 +120,7 @@ func (vc *VaultClient) authenticate() error {
 	log.Println("✅ Vault Auth 성공! (Auth Token 획득)")
 	log.Printf("   - 토큰 TTL: %s", time.Duration(secret.Auth.LeaseDuration)*time.Second)
 	log.Printf("   - 토큰 갱신 가능 여부: %t", secret.Auth.Renewable)
-	
+
 	return nil
 }
 
@@ -140,25 +139,25 @@ func (vc *VaultClient) readKvSecret(path string) {
 		log.Printf("❌ Secret 조회 실패 (데이터 없음): %s", path)
 		return
 	}
-	
+
 	// KV v2 데이터 구조: Data["data"], Data["metadata"]
 	data, ok := secret.Data["data"].(map[string]interface{})
 	if !ok {
 		log.Printf("❌ Secret 조회 실패 (데이터 구조 오류): %s", path)
 		return
 	}
-	
+
 	metadata, _ := secret.Data["metadata"].(map[string]interface{})
 	version := "N/A"
 	if v, found := metadata["version"]; found {
 		version = fmt.Sprintf("%v", v)
 	}
-	
+
 	// 캐시 업데이트
 	vc.stateMutex.Lock()
 	vc.secretsCache[path] = data
 	vc.stateMutex.Unlock()
-	
+
 	log.Printf("   - ✅ Secret 조회/갱신 성공: %s, Version: %s", path, version)
 }
 
@@ -194,12 +193,12 @@ func (vc *VaultClient) checkAndRenewToken() error {
 		log.Printf("❌ 토큰 상태 조회 실패. 재인증 시도: %v", err)
 		return vc.authenticate()
 	}
-	
+
 	ttlStr, ok := lookup.Data["ttl"].(string)
 	if !ok {
 		return fmt.Errorf("❌ 토큰 TTL을 읽을 수 없음")
 	}
-	
+
 	// TTL 문자열을 duration으로 파싱 (예: 1h10m3s)
 	ttl, err := time.ParseDuration(ttlStr)
 	if err != nil {
@@ -222,9 +221,9 @@ func (vc *VaultClient) checkAndRenewToken() error {
 			log.Println("⚠️ 토큰이 갱신 불가능합니다. 재인증 시도.")
 			return vc.authenticate()
 		}
-		
+
 		log.Printf(">>> ⚠️ 토큰 갱신 임계점 도달! 갱신 실행... (실행전 TTL: %s)", ttl)
-		
+
 		// 토큰 갱신
 		renewedSecret, err := vc.client.Auth().Token().RenewSelf(vc.client.Token())
 		if err != nil {
@@ -236,7 +235,7 @@ func (vc *VaultClient) checkAndRenewToken() error {
 		vc.stateMutex.Lock()
 		vc.currentTokenMetadata = renewedSecret
 		vc.stateMutex.Unlock()
-		
+
 		newTTL := time.Duration(renewedSecret.Auth.LeaseDuration) * time.Second
 		log.Printf(">>> ✅ 토큰 갱신 성공! 새 TTL: %s", newTTL)
 	}
@@ -246,7 +245,7 @@ func (vc *VaultClient) checkAndRenewToken() error {
 // startScheduledTasks는 KV Secret 갱신 및 토큰 모니터링 스케줄러를 시작합니다.
 func (vc *VaultClient) startScheduledTasks() {
 	interval := vc.config.RenewalIntervalSeconds
-	
+
 	log.Printf("--- ♻️ KV Secrets 및 토큰 갱신 모니터링 스케쥴러 시작 (Interval: %s) ---", interval)
 
 	ticker := time.NewTicker(interval)
@@ -279,7 +278,7 @@ func main() {
 	// 로깅 설정
 	log.SetOutput(os.Stdout)
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
-	
+
 	// 1. 설정 로드
 	cfg, err := loadConfig("config.ini")
 	if err != nil {
@@ -296,7 +295,7 @@ func main() {
 	if err := client.authenticate(); err != nil {
 		log.Fatalf("❌ 초기 인증 실패: %v", err)
 	}
-	
+
 	log.Println("\n--- 🔎 초기 KV Secrets 조회 시작 ---")
 	for _, path := range cfg.KVSecretsPaths {
 		client.readKvSecret(path)
