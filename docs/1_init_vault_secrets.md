@@ -23,14 +23,15 @@ export VAULT_APPROLE_SECRET_ID_NUM_USES="0"
 # CLI 명령어 (환경 변수 적용)
 
 ```bash
+# 기본 설정
 vault namespace create "${VAULT_NAMESPACE}"
 
-export VAULT_NAMESPACE="${VAULT_NAMESPACE}"
-
+# 시크릿 엔진 생성 및 샘플 데이터 구성
 vault secrets enable -namespace="${VAULT_NAMESPACE}" -path="${KV_PATH}" kv-v2
 
 vault kv put -namespace="${VAULT_NAMESPACE}" "${KV_PATH}/${KV_SECRET_PATH}" username="${KV_USERNAME}" password="${KV_PASSWORD}" conn_url="${KV_CONN_URL}"
 
+# 정책 생성
 vault policy write -namespace="${VAULT_NAMESPACE}" "${VAULT_POLICYNAME}" - <<EOF
 path "${KV_PATH}/data/*" {
   capabilities = ["read", "list"]
@@ -40,6 +41,7 @@ path "auth/token/renew-self" {
 }
 EOF
 
+# 인증 생성
 vault auth enable -namespace="${VAULT_NAMESPACE}" approle
 
 vault write -namespace="${VAULT_NAMESPACE}" auth/approle/role/"${VAULT_APPROLE_ROLENAME}" \
@@ -49,6 +51,8 @@ vault write -namespace="${VAULT_NAMESPACE}" auth/approle/role/"${VAULT_APPROLE_R
   secret_id_ttl="${VAULT_APPROLE_SECRET_ID_TTL}" \
   secret_id_num_uses="${VAULT_APPROLE_SECRET_ID_NUM_USES}"
 
+
+# approle 발급
 vault read -namespace="${VAULT_NAMESPACE}" auth/approle/role/"${VAULT_APPROLE_ROLENAME}"/role-id
 vault write -namespace="${VAULT_NAMESPACE}" -f auth/approle/role/"${VAULT_APPROLE_ROLENAME}"/secret-id
 
