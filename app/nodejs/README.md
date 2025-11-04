@@ -11,14 +11,14 @@
 
 ## 실행 방법
 ```bash
-# 절차
+# 패키지 설치
+apt install npm
+
+# 의존성 설치/구성
 npm install
 
-# 의존성 설치/구성(Makefile 위치)
-
-
 # 실행
-
+npm start
 ```
 
 ## 결과 예시
