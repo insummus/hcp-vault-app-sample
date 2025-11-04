@@ -1,8 +1,8 @@
-
 # 환경 변수 선언
 
 ```bash
-export VAULT_NAMESPACE="poc-main"
+export VAULT_ADDR="http://127.0.0.1:8200"
+export VAULT_POC_NAMESPACE="poc-main"
 export KV_PATH="kv_app"
 export KV_SECRET_PATH="application"
 export KV_USERNAME="admin"
@@ -24,7 +24,8 @@ export VAULT_APPROLE_SECRET_ID_NUM_USES="0"
 
 ```bash
 # 기본 설정
-vault namespace create "${VAULT_NAMESPACE}"
+vault namespace create "${VAULT_POC_NAMESPACE}"
+export VAULT_NAMESPACE="${VAULT_POC_NAMESPACE}"
 
 # 시크릿 엔진 생성 및 샘플 데이터 구성
 vault secrets enable -namespace="${VAULT_NAMESPACE}" -path="${KV_PATH}" kv-v2
@@ -53,7 +54,9 @@ vault write -namespace="${VAULT_NAMESPACE}" auth/approle/role/"${VAULT_APPROLE_R
 
 
 # approle 발급
-vault read -namespace="${VAULT_NAMESPACE}" auth/approle/role/"${VAULT_APPROLE_ROLENAME}"/role-id
-vault write -namespace="${VAULT_NAMESPACE}" -f auth/approle/role/"${VAULT_APPROLE_ROLENAME}"/secret-id
+vault read -namespace="${VAULT_NAMESPACE}" auth/approle/role/"${VAULT_APPROLE_ROLENAME}"/role-id >> approle_id.txt
+vault write -namespace="${VAULT_NAMESPACE}" -f auth/approle/role/"${VAULT_APPROLE_ROLENAME}"/secret-id >> approle_id.txt
+
+
 
 ```

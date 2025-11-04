@@ -3,7 +3,7 @@ package com.example.vault.client
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
-import io.github.microutils.kotlin.logging.KotlinLogging
+// import io.github.microutils.kotlin.logging.KotlinLogging // 빌드 오류 우회를 위해 제거됨
 import kotlinx.coroutines.*
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
@@ -12,10 +12,17 @@ import java.io.IOException
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.math.max
 
-private val log = KotlinLogging.logger {}
+// 로깅 라이브러리 대신 표준 출력 사용 (Unresolved reference 오류 우회)
+private val log = object {
+    fun info(message: () -> String) = println("[INFO] VaultClient: ${message()}")
+    fun error(e: Throwable? = null, message: () -> String) = System.err.println("[ERROR] VaultClient: ${message()}. Stack: ${e?.message ?: ""}")
+    fun warn(message: () -> String) = System.err.println("[WARN] VaultClient: ${message()}")
+}
+
 
 // --- JSON Data Classes (Moshi) ---
 @JsonClass(generateAdapter = true)
@@ -71,19 +78,24 @@ class VaultClient(private val config: VaultConfig) {
     suspend fun authenticate(): Boolean {
         log.info { "--- 🔐 Vault AppRole 인증 시작 ---" }
 
-        val url = "${config.vaultAddr}/v1/auth/approle/login"
+        // [FIX 1] 네임스페이스 경로 수정: /v1/{namespace}/auth/approle/login
+        val namespacePrefix = if (config.namespace.isNotEmpty()) "${config.namespace}/" else ""
+        val url = "${config.vaultAddr}/v1/${namespacePrefix}auth/approle/login"
+
         val payload = AuthPayload(config.roleId, config.secretId)
         val jsonPayload = moshi.adapter(AuthPayload::class.java).toJson(payload)
 
         val request = Request.Builder()
             .url(url)
             .post(jsonPayload.toRequestBody(jsonMediaType))
-            .addVaultHeaders()
+            // [FIX 2] URL에 네임스페이스가 포함되었으므로, 헤더에서는 네임스페이스를 제외합니다.
+            .addVaultHeaders(excludeNamespace = true) 
             .build()
 
         return try {
             val response = executeRequest(request)
-            val responseBody = response.body.string()
+            // [FIX 3] 널 안전성 수정
+            val responseBody = response.body!!.string() 
 
             if (response.code != 200) {
                 log.error { "❌ AppRole 인증 실패. HTTP Code: ${response.code}, Body: $responseBody" }
@@ -129,7 +141,8 @@ class VaultClient(private val config: VaultConfig) {
 
         return try {
             val response = executeRequest(request)
-            val responseBody = response.body.string()
+            // [FIX 3] 널 안전성 수정
+            val responseBody = response.body!!.string() 
 
             if (response.code != 200) {
                 log.error { "❌ 토큰 갱신 실패. HTTP Code: ${response.code}, Body: $responseBody" }
@@ -172,7 +185,8 @@ class VaultClient(private val config: VaultConfig) {
 
         try {
             val response = executeRequest(request)
-            val responseBody = response.body.string()
+            // [FIX 3] 널 안전성 수정
+            val responseBody = response.body!!.string() 
 
             if (response.code != 200) {
                 log.error { "   - Secret 조회 실패. HTTP Code: ${response.code}, Path: $secretPath" }
@@ -291,7 +305,16 @@ class VaultClient(private val config: VaultConfig) {
 
     /** OkHttp Call을 suspend function으로 변환 */
     private suspend fun executeRequest(request: Request): Response = suspendCancellableCoroutine { continuation ->
-        httpClient.newCall(request).enqueue(object : Callback {
+        // Call 객체를 변수로 저장
+        val call = httpClient.newCall(request) 
+        
+        // [FIX 4] 코루틴 취소 시 OkHttp 요청도 취소하도록 핸들러 추가
+        continuation.invokeOnCancellation {
+            call.cancel()
+        }
+        
+        // Call 객체를 사용하여 enqueue
+        call.enqueue(object : Callback { 
             override fun onFailure(call: Call, e: IOException) {
                 continuation.resumeWithException(e)
             }
@@ -303,11 +326,14 @@ class VaultClient(private val config: VaultConfig) {
     }
     
     /** Request.Builder에 Vault 공통 헤더를 추가합니다. */
-    private fun Request.Builder.addVaultHeaders(token: String? = null): Request.Builder {
+    private fun Request.Builder.addVaultHeaders(token: String? = null, excludeNamespace: Boolean = false): Request.Builder {
         header("Content-Type", jsonMediaType.toString())
-        if (config.namespace.isNotEmpty()) {
+        
+        // AppRole 인증 시 URL에 네임스페이스를 포함했기 때문에 헤더에서는 제외
+        if (config.namespace.isNotEmpty() && !excludeNamespace) {
             header("X-Vault-Namespace", config.namespace)
         }
+        
         if (token != null && token.isNotEmpty()) {
             header("X-Vault-Token", token)
         }
@@ -325,9 +351,11 @@ fun main() = runBlocking {
         
         client.run()
         
-        // 애플리케이션 유지를 위해 무한 대기
-        GlobalScope.coroutineContext.job.join() 
+        // [FIX 5] GlobalScope.coroutineContext.job.join() 대신 무한 대기
+        // runBlocking 컨텍스트가 종료되지 않도록 유지하여 백그라운드 스케줄러가 계속 실행되게 합니다.
+        delay(Long.MAX_VALUE) 
     } catch (e: Exception) {
-        log.error(e) { "❌ 애플리케이션 치명적 오류 발생" }
+        // 에러 로깅은 표준 출력으로 대체
+        System.err.println("[FATAL ERROR] 애플리케이션 치명적 오류 발생: ${e.message}")
     }
 }

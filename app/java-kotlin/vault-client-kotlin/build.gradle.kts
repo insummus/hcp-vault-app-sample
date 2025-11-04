@@ -1,6 +1,7 @@
 plugins {
     kotlin("jvm") version "1.9.23"
     application
+    id("com.google.devtools.ksp") version "1.9.23-1.0.20" 
 }
 
 group = "com.example"
@@ -31,16 +32,16 @@ dependencies {
 
     // JSON 처리 (Moshi)
     implementation("com.squareup.moshi:moshi-kotlin:1.15.1")
-    ksp("com.squareup.moshi:moshi-kotlin-codegen:1.15.1") // Annotation Processor
+    ksp("com.squareup.moshi:moshi-kotlin-codegen:1.15.1") 
 
     // 비동기 처리 (Kotlin Coroutines)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.8.0")
 
-    // 로깅 (kotlin-logging + Logback)
-    implementation("io.github.microutils:kotlin-logging:3.0.5")
-    implementation("ch.qos.logback:logback-classic:1.4.14")
-
     // 설정 파일 로드 (Typesafe Config)
     implementation("com.typesafe:config:1.4.3")
+
+    // Use the latest JUnit 5 library for testing.
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.0")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.0")
 }

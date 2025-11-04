@@ -1,10 +1,12 @@
 package com.example.vault.client
 
 import com.typesafe.config.ConfigFactory
-import io.github.microutils.kotlin.logging.KotlinLogging
 import java.time.Duration
 
-private val log = KotlinLogging.logger {}
+// 로깅 라이브러리 대신 표준 출력 사용
+private fun logInfo(message: String) = println("[INFO] VaultConfig: $message")
+private fun logError(message: String) = System.err.println("[ERROR] VaultConfig: $message")
+
 
 // TypeSafe Config를 사용하여 설정 로드
 data class VaultConfig(
@@ -19,7 +21,7 @@ data class VaultConfig(
 ) {
     companion object {
         fun load(): VaultConfig {
-            log.info { "⏳ 설정 파일 (application.properties) 로드 시작..." }
+            logInfo("⏳ 설정 파일 (application.properties) 로드 시작...")
             val config = ConfigFactory.load().getConfig("vault")
 
             val vaultConfig = VaultConfig(
@@ -33,7 +35,7 @@ data class VaultConfig(
                 renewalThresholdRatio = config.getInt("token_renewal_threshold_percent") / 100.0
             )
 
-            log.info { "✅ 설정 파일 로드 완료. Vault Address: ${vaultConfig.vaultAddr}" }
+            logInfo("✅ 설정 파일 로드 완료. Vault Address: ${vaultConfig.vaultAddr}")
             return vaultConfig
         }
     }
