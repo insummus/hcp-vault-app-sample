@@ -43,7 +43,7 @@ vault.vault_secret_id =
 kv_mount_path = kv_app
 kv_secrets_paths = application
 
- # 인증 갱신 및 조회 스케줄링 설정(기본)
+# 인증 갱신 및 조회 스케줄링 설정(기본)
 kv_renewal_interval_seconds = 10
 token_renewal_threshold_percent = 20
 ```

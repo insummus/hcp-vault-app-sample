@@ -1,59 +1,73 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
+using System.Threading;
 using Microsoft.Extensions.Configuration;
+using System.IO;
+using System.Linq; // ⬅️ 추가: Distinct() 사용을 위해
 
-namespace VaultClientDotnet;
+namespace NewVaultClientDotnet;
 
 public class VaultClient
 {
     private readonly VaultConfig _config;
     private readonly HttpClient _httpClient;
-    private readonly JsonSerializerOptions _jsonOptions;
 
-    // Vault 상태 변수
-    private string _currentToken = string.Empty;
-    private long _leaseDurationSeconds = 0;
-    private long _authTimeEpochSeconds = 0;
-    private bool _isRenewable = false;
+    // Vault 상태 변수 (volatile long 오류 수정 완료)
+    private volatile string _currentToken = string.Empty;
+    private long _leaseDurationSeconds = 0; 
+    private long _authTimeEpochSeconds = 0; 
+    private volatile bool _isRenewable = false;
 
     // 시크릿 저장소 (스레드 안전한 캐시)
     private readonly ConcurrentDictionary<string, Dictionary<string, string>> _secretsCache = new();
-
+    
     public VaultClient(VaultConfig config)
     {
         _config = config;
         _httpClient = new HttpClient { BaseAddress = new Uri(_config.Addr) };
-        _jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+        // ❌ Content-Type 헤더 설정 제거 (헤더 오용 오류 수정)
     }
 
     private long GetRemainingTtl()
     {
         var currentTimeEpoch = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var elapsed = currentTimeEpoch - _authTimeEpochSeconds;
-        return _leaseDurationSeconds - elapsed;
+        return Math.Max(0, _leaseDurationSeconds - elapsed);
     }
-    
-    // =================================
-    // 1. 인증: AppRole 로그인 (POST /v1/auth/approle/login)
-    // =================================
-    public async Task AuthenticateAndLoadSecretsAsync()
+
+    // Vault 공통 헤더 추가
+    private void AddVaultHeaders(HttpRequestMessage request, string? token = null)
+    {
+        if (!string.IsNullOrEmpty(_config.Namespace))
+        {
+            request.Headers.Add("X-Vault-Namespace", _config.Namespace);
+        }
+        if (!string.IsNullOrEmpty(token))
+        {
+            request.Headers.Add("X-Vault-Token", token);
+        }
+    }
+
+    // 1. AppRole 인증 (POST /v1/auth/approle/login)
+    public async Task AuthenticateAsync()
     {
         Console.WriteLine("--- 🔐 Vault AppRole 인증 시작 ---");
 
         var url = "/v1/auth/approle/login";
         var payload = new { role_id = _config.RoleId, secret_id = _config.SecretId };
-
+        var jsonPayload = JsonSerializer.Serialize(payload);
+        
         var request = new HttpRequestMessage(HttpMethod.Post, url)
         {
-            Content = JsonContent.Create(payload, options: _jsonOptions)
+            Content = new StringContent(jsonPayload, System.Text.Encoding.UTF8, "application/json")
         };
-        AddVaultHeaders(request);
+        
+        AddVaultHeaders(request); 
 
         var response = await _httpClient.SendAsync(request);
         var responseBody = await response.Content.ReadAsStringAsync();
@@ -73,83 +87,20 @@ public class VaultClient
         _authTimeEpochSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
         Console.WriteLine("✅ Vault Auth 성공! (Auth Token 획득)");
-        Console.WriteLine($"   - 토큰 스트링 (일부): {_currentToken[..10]}...");
-        Console.WriteLine($"   - 토큰 lease time (TTL): {_leaseDurationSeconds} 초");
-        Console.WriteLine($"   - 토큰 갱신 가능 여부: {_isRenewable}");
-
-        // 초기 KV 데이터 조회
-        Console.WriteLine("\n--- 🔎 초기 KV Secrets 조회 시작 ---");
-        foreach (var path in _config.KvSecretsPaths)
-        {
-            await ReadKvSecretAsync(path);
-        }
-        Console.WriteLine("✅ 초기 KV Secrets 조회 완료.");
-        PrintSecretsCache();
-    }
-    
-    // =================================
-    // 2. 스케줄러 (토큰 갱신 및 KV Secret 갱신)
-    // =================================
-    public void StartScheduledTasks()
-    {
-        Console.WriteLine($"--- ♻️ KV Secrets 및 토큰 갱신 모니터링 스케쥴러 시작 (Interval: {_config.RenewalIntervalSeconds}초) ---");
-        
-        var intervalMs = _config.RenewalIntervalSeconds * 1000;
-        
-        // Timer를 사용하여 주기적인 작업 스케줄링
-        var timer = new System.Threading.Timer(async _ =>
-        {
-            await ScheduledTaskAsync();
-        }, null, intervalMs, intervalMs);
+        Console.WriteLine($"   - 토큰 TTL: {_leaseDurationSeconds} 초, Renewable: {_isRenewable}");
     }
 
-    private async Task ScheduledTaskAsync()
-    {
-        // 1. 토큰 갱신 모니터링 및 로깅 수행
-        var remainingTtl = GetRemainingTtl();
-        var renewalThreshold = (long)(_leaseDurationSeconds * (_config.TokenRenewalThresholdPercent / 100.0));
-        Console.WriteLine($"   - 토큰 잔여 TTL: {remainingTtl} 초 (갱신 임계점: {renewalThreshold} 초)");
-
-        // 토큰 갱신 임계점 도달 확인 및 갱신 실행
-        if (remainingTtl <= renewalThreshold && remainingTtl > 0)
-        {
-            try
-            {
-                await ManualRenewTokenAsync(remainingTtl);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine($"❌ 토큰 갱신 중 예외 발생: {e.Message}");
-            }
-        }
-
-        // 2. KV Secret 데이터 갱신 실행
-        Console.WriteLine("\n--- ♻️ KV Secrets 갱신 스케줄러 실행 ---");
-        foreach (var path in _config.KvSecretsPaths)
-        {
-            try
-            {
-                await ReadKvSecretAsync(path);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine($"❌ KV Secret 갱신 실패 ({path}): {e.Message}");
-            }
-        }
-        PrintSecretsCache();
-    }
-
-    /** 토큰 갱신 로직 (REST API 호출) */
-    private async Task ManualRenewTokenAsync(long remainingTtl)
+    // 2. 토큰 갱신 (POST /v1/auth/token/renew-self)
+    private async Task<bool> ManualRenewTokenAsync(long remainingTtl)
     {
         if (!_isRenewable)
         {
             Console.WriteLine("⚠️ 토큰이 갱신 불가능합니다. 재인증이 필요합니다.");
-            return;
+            return false;
         }
 
         Console.WriteLine($">>> ⚠️ 토큰 갱신 임계점 도달! 갱신 실행... (실행전 TTL: {remainingTtl}초)");
-        
+
         var url = "/v1/auth/token/renew-self";
         var request = new HttpRequestMessage(HttpMethod.Post, url)
         {
@@ -163,7 +114,7 @@ public class VaultClient
         if (!response.IsSuccessStatusCode)
         {
             Console.WriteLine($"❌ 토큰 갱신 실패. HTTP Code: {response.StatusCode}, Body: {responseBody}");
-            throw new Exception("토큰 갱신 REST API 실패");
+            return false;
         }
 
         using var document = JsonDocument.Parse(responseBody);
@@ -172,18 +123,26 @@ public class VaultClient
         var oldTtl = _leaseDurationSeconds;
         _leaseDurationSeconds = auth.GetProperty("lease_duration").GetInt64();
         _authTimeEpochSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        
+
         Console.WriteLine(">>> ✅ 토큰 갱신 성공!");
         Console.WriteLine($"    - 실행후 새로운 TTL: {_leaseDurationSeconds} 초 (이전 TTL: {oldTtl} 초)");
+        return true;
     }
 
-    // =================================
-    // 3. KV Secret 조회 (GET /v1/<mount_path>/data/<path>)
-    // =================================
-    private async Task ReadKvSecretAsync(string secretPath)
+    // 3. KV Secret 조회 (GET /v1/{mount}/data/{path})
+    public async Task ReadKvSecretAsync(string secretPath)
     {
+        if (string.IsNullOrEmpty(_currentToken))
+        {
+            Console.WriteLine("🛑 Secret 조회 불가: 인증 토큰이 없습니다.");
+            return;
+        }
+        
         var url = $"/v1/{_config.KvMountPath}/data/{secretPath}"; 
-        Console.WriteLine($">>> KV Secret 요청 URL: {_httpClient.BaseAddress}{url}");
+        
+        // ⬅️ 수정: BaseAddress와 상대 URL을 조합하여 이중 슬래시를 방지하고 깔끔한 URL 로그 출력
+        var fullUrl = new Uri(_httpClient.BaseAddress!, url).AbsoluteUri; 
+        Console.WriteLine($">>> 🔎 KV Secret 요청 URL: {fullUrl}");
 
         var request = new HttpRequestMessage(HttpMethod.Get, url);
         AddVaultHeaders(request, _currentToken);
@@ -205,7 +164,7 @@ public class VaultClient
         var secretData = new Dictionary<string, string>();
         foreach (var property in dataNode.EnumerateObject())
         {
-            secretData.Add(property.Name, property.Value.GetString() ?? string.Empty);
+            secretData.Add(property.Name, property.Value.ToString() ?? string.Empty);
         }
 
         _secretsCache[secretPath] = secretData;
@@ -213,10 +172,10 @@ public class VaultClient
         var version = metadata.TryGetProperty("version", out var versionElement) 
                       ? versionElement.GetInt32().ToString() : "N/A";
                              
-        Console.WriteLine($"   - Secret 조회/갱신 성공: {secretPath}, Version: {version}");
+        Console.WriteLine($"   - ✅ Secret 조회/갱신 성공: {secretPath}, Version: {version}");
     }
 
-    private void PrintSecretsCache()
+    public void PrintSecretsCache()
     {
         Console.WriteLine("\n--- 📋 현재 Secrets Cache 내용 ---");
         foreach (var kvp in _secretsCache)
@@ -230,57 +189,96 @@ public class VaultClient
         Console.WriteLine("---------------------------------");
     }
 
-    private void AddVaultHeaders(HttpRequestMessage request, string? token = null)
+    // 4. 스케줄러 로직
+    public void StartScheduledTasks()
     {
-        if (!string.IsNullOrEmpty(_config.Namespace))
+        Console.WriteLine($"--- ♻️ KV Secrets 및 토큰 갱신 모니터링 스케쥴러 시작 (Interval: {_config.RenewalIntervalSeconds}초) ---");
+        
+        var intervalMs = _config.RenewalIntervalSeconds * 1000;
+        
+        var timer = new System.Threading.Timer(async _ =>
         {
-            request.Headers.Add("X-Vault-Namespace", _config.Namespace);
-        }
-        if (!string.IsNullOrEmpty(token))
+            await ScheduledTaskAsync();
+        }, null, intervalMs, intervalMs);
+    }
+
+    private async Task ScheduledTaskAsync()
+    {
+        // 1. 토큰 갱신 모니터링
+        var remainingTtl = GetRemainingTtl();
+        var renewalThreshold = (long)(_leaseDurationSeconds * (_config.TokenRenewalThresholdPercent / 100.0));
+        Console.WriteLine($"\n⏳ [Token Manager] 토큰 잔여 TTL: {remainingTtl} 초 (갱신 임계점: {renewalThreshold} 초)");
+
+        if (remainingTtl <= renewalThreshold && remainingTtl > 0)
         {
-            request.Headers.Add("X-Vault-Token", token);
+            try
+            {
+                var success = await ManualRenewTokenAsync(remainingTtl);
+                if (!success) await AuthenticateAsync(); 
+            }
+            catch (Exception)
+            {
+                Console.WriteLine("❌ 토큰 갱신 오류. 재인증 시도...");
+                await AuthenticateAsync();
+            }
         }
+        else if (remainingTtl <= 0)
+        {
+            Console.WriteLine("🛑 토큰 만료! 재인증을 시도합니다...");
+            await AuthenticateAsync();
+        }
+
+
+        // 2. KV Secret 데이터 갱신 실행
+        Console.WriteLine("\n--- ♻️ KV Secrets 갱신 스케줄러 실행 ---");
+        // ⬅️ 수정: .Distinct()를 사용하여 중복 경로 요청을 방지합니다.
+        foreach (var path in _config.KvSecretsPaths.Distinct())
+        {
+            await ReadKvSecretAsync(path);
+        }
+        PrintSecretsCache();
     }
 }
 
-// =================================
-// Program Entry Point
-// =================================
+// 프로그램 진입점
 internal static class Program
 {
     public static async Task Main(string[] args)
     {
-        // 1. 설정 로드
-        var config = LoadConfiguration();
-        var vaultConfig = new VaultConfig();
-        config.GetSection("Vault").Bind(vaultConfig);
-
-        var client = new VaultClient(vaultConfig);
-
         try
         {
+            // 1. 설정 로드 (appsettings.json)
+            var config = new ConfigurationBuilder()
+                .SetBasePath(Directory.GetCurrentDirectory())
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .Build();
+                
+            var vaultConfig = new VaultConfig();
+            config.GetSection("Vault").Bind(vaultConfig);
+
+            var client = new VaultClient(vaultConfig);
+
             // 2. 초기 인증 및 Secret 로드
-            await client.AuthenticateAndLoadSecretsAsync();
+            await client.AuthenticateAsync();
+            
+            Console.WriteLine("\n--- 🔎 초기 KV Secrets 조회 시작 ---");
+            foreach (var path in vaultConfig.KvSecretsPaths.Distinct()) // ⬅️ 초기 로드 시에도 중복 방지
+            {
+                await client.ReadKvSecretAsync(path);
+            }
+            Console.WriteLine("✅ 초기 KV Secrets 조회 완료.");
+            client.PrintSecretsCache();
 
             // 3. 스케줄러 시작
             client.StartScheduledTasks();
             
-            // 애플리케이션 유지를 위해 무한 대기
-            Console.WriteLine("🚀 .NET Vault Client Started. Press Ctrl+C to exit.");
-            await Task.Delay(Timeout.Infinite);
+            Console.WriteLine("\n🚀 .NET Vault Client Started. Press Ctrl+C to exit.");
+            await Task.Delay(System.Threading.Timeout.Infinite);
         }
         catch (Exception e)
         {
             Console.WriteLine($"❌ 애플리케이션 치명적 오류 발생: {e.Message}");
             Environment.Exit(1);
         }
-    }
-
-    private static IConfiguration LoadConfiguration()
-    {
-        return new ConfigurationBuilder()
-            .SetBasePath(AppContext.BaseDirectory)
-            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-            .Build();
     }
 }
