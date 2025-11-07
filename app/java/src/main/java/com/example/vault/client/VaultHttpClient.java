@@ -196,7 +196,7 @@ public class VaultHttpClient {
         String url = config.vaultAddr + "/v1/" + config.kvMountPath + "/data/" + secretPath; 
 
         // 에러 진단을 위해 요청 URL을 출력
-        log.error(">>> KV Secret 요청 URL: {}", url);
+        log.info(">>> KV Secret 요청 URL: {}", url);
 
         try (CloseableHttpClient httpClient = HttpClients.createDefault();
              CloseableHttpResponse response = executeGet(httpClient, url, currentToken)) {

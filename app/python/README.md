@@ -14,7 +14,7 @@ sudo dnf update -y
 
 # 2. Python 3 및 pip 설치
 # Amazon Linux 2023은 dnf를 사용합니다.
-sudo dnf install -y python3 python3-pip
+sudo dnf install -y python3 python3-pip python3-virtualenv
 
 # 3. 버전 확인
 python3 --version
@@ -36,7 +36,13 @@ interval = 10
 
 ## 빌드 및 실행
 ```bash
-#1 의존성 설치/구성
+# 1. 가상 환경 생성 (venv라는 이름으로 생성)
+python3 -m venv venv
+
+# 2. 가상 환경 활성화
+source venv/bin/activate
+
+#1 의존성 설치/구성 - 명령 프롬프트 앞에 (venv)가 표시 된 환경에서 실행
 pip install -r requirements.txt
 
 #2. 실행

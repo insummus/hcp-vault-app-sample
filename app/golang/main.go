@@ -7,13 +7,12 @@ import (
 	"strings"
 	"sync"
 	"time"
-
+	"encoding/json"
 	"github.com/hashicorp/vault/api"
 	"gopkg.in/ini.v1"
 )
 
 // --- Configuration Struct ---
-
 // Config 구조체는 설정 파일의 값을 담습니다.
 type Config struct {
 	VaultAddr                    string
@@ -147,18 +146,12 @@ func (vc *VaultClient) readKvSecret(path string) {
 		return
 	}
 
-	metadata, _ := secret.Data["metadata"].(map[string]interface{})
-	version := "N/A"
-	if v, found := metadata["version"]; found {
-		version = fmt.Sprintf("%v", v)
-	}
-
 	// 캐시 업데이트
 	vc.stateMutex.Lock()
 	vc.secretsCache[path] = data
 	vc.stateMutex.Unlock()
 
-	log.Printf("   - ✅ Secret 조회/갱신 성공: %s, Version: %s", path, version)
+	log.Printf("   - ✅ Secret 조회/갱신 성공: %s", path)
 }
 
 // printSecretsCache는 현재 캐시된 시크릿 내용을 출력합니다.
@@ -194,16 +187,31 @@ func (vc *VaultClient) checkAndRenewToken() error {
 		return vc.authenticate()
 	}
 
-	ttlStr, ok := lookup.Data["ttl"].(string)
+	rawTTL, ok := lookup.Data["ttl"]
 	if !ok {
-		return fmt.Errorf("❌ 토큰 TTL을 읽을 수 없음")
+		return fmt.Errorf("❌ 토큰 TTL 필드를 찾을 수 없음")
 	}
 
-	// TTL 문자열을 duration으로 파싱 (예: 1h10m3s)
-	ttl, err := time.ParseDuration(ttlStr)
-	if err != nil {
-		return fmt.Errorf("❌ 토큰 TTL 파싱 오류: %w", err)
+	// json.Number
+	var ttlFloat float64
+	
+	// 1. float64로 저장되었는지 확인
+	if f, ok := rawTTL.(float64); ok {
+		ttlFloat = f
+	// 2. json.Number로 저장되었는지 확인하고 변환
+	} else if num, ok := rawTTL.(json.Number); ok {
+		var err error
+		ttlFloat, err = num.Float64()
+		if err != nil {
+			return fmt.Errorf("❌ json.Number를 float64로 변환 실패: %w", err)
+		}
+	} else {
+		// 예상치 못한 타입인 경우 오류 반환
+		return fmt.Errorf("❌ 토큰 TTL이 예상된 숫자 타입이 아닙니다. (실제 타입: %T)", rawTTL)
 	}
+	
+	// float64 초를 time.Duration으로 변환
+	ttl := time.Duration(ttlFloat) * time.Second
 
 	renewable, _ := lookup.Data["renewable"].(bool)
 	initialTTL := time.Duration(tokenMeta.Auth.LeaseDuration) * time.Second
@@ -225,7 +233,8 @@ func (vc *VaultClient) checkAndRenewToken() error {
 		log.Printf(">>> ⚠️ 토큰 갱신 임계점 도달! 갱신 실행... (실행전 TTL: %s)", ttl)
 
 		// 토큰 갱신
-		renewedSecret, err := vc.client.Auth().Token().RenewSelf(vc.client.Token())
+		renewedSecret, err := vc.client.Auth().Token().RenewSelf(0)
+		
 		if err != nil {
 			log.Printf("❌ 토큰 갱신 실패. 재인증 시도: %v", err)
 			return vc.authenticate() // 갱신 실패 시 재인증 시도

@@ -50,6 +50,6 @@ cmake ..
 # (실행 파일명은 CMakeLists.txt에 정의된 대로 vault_client입니다)
 make
 
-# 4. 애플리케이션 실행
-./vault_client
+# 4. 애플리케이션 실행 (config.properties 파일과 동일한 위치에서 실행)
+./build/vault_client
 ```
