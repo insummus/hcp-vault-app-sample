@@ -2,28 +2,12 @@
 ## 디렉토리 구조
 ```
 dotnet-cs
-├── appsettings.json         # Vault 접속 및 스케줄링 설정 파일
-├── VaultClient.csproj       # .NET 프로젝트 파일 (의존성 정의)
-├── VaultClient.cs           # 메인 Vault 클라이언트 로직 및 Entry Point
-└── VaultConfig.cs           # 설정 클래스 (C# 객체)
-```
-
-# Java(Kotlin)
-## 디렉토리 구조
-```
-java-kotlin/
-├── build.gradle.kts     # Gradle Kotlin 빌드 파일
-└── src/
-    └── main/
-        ├── kotlin/
-        │   └── com/example/vault/client/
-        │       ├── VaultConfig.kt
-        │       └── VaultClient.kt      # 메인 로직
-        └── resources/
-            ├── application.properties  # 설정 파일
-            └── logback.xml
-```
-
+├── README.md
+└── src
+    ├── appsettings.json          # Vault 접속 및 스케줄링 설정 파일
+    ├── VaultClient.cs            # .NET 프로젝트 파일 (의존성 정의)
+    ├── VaultClient.csproj        # 메인 Vault 클라이언트 로직 및 Entry Point
+    └── VaultConfig.cs            # 설정 클래스 (C# 객체)
 
 ## 환경 구성
 ```bash

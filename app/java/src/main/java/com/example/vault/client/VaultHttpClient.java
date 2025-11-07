@@ -121,7 +121,7 @@ public class VaultHttpClient {
     // 2. 스케줄러 (토큰 갱신 및 KV Secret 갱신)
     // =================================
     public void startScheduledTasks() {
-        // 토큰 갱신과 KV Secret 갱신을 하나의 스케줄러로 통합합니다.
+        // 토큰 갱신과 KV Secret 갱신을 하나의 스케줄러로 통합
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
         // KV 데이터 갱신 및 토큰 모니터링 스케줄러 (설정된 interval로 실행)

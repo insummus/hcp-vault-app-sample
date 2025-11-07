@@ -13,7 +13,7 @@ import (
 )
 
 // --- Configuration Struct ---
-// Config 구조체는 설정 파일의 값을 담습니다.
+// Config 구조체는 설정 파일 값을 위해 선언
 type Config struct {
 	VaultAddr                    string
 	Namespace                    string
@@ -25,7 +25,7 @@ type Config struct {
 	TokenRenewalThresholdPercent float64
 }
 
-// loadConfig는 config.ini 파일에서 설정을 로드합니다.
+// loadConfig는 config.ini 파일에서 설정을 로드
 func loadConfig(filename string) (Config, error) {
 	var cfg Config
 
@@ -61,7 +61,7 @@ func loadConfig(filename string) (Config, error) {
 
 // --- Vault Client Struct and Methods ---
 
-// VaultClient는 Vault와의 통신 및 상태 관리를 담당합니다.
+// VaultClient는 Vault와의 통신 및 상태 관리
 type VaultClient struct {
 	config Config
 	client *api.Client
@@ -71,7 +71,7 @@ type VaultClient struct {
 	stateMutex           sync.RWMutex
 }
 
-// NewVaultClient는 VaultClient를 초기화합니다.
+// NewVaultClient는 VaultClient를 초기화
 func NewVaultClient(cfg Config) (*VaultClient, error) {
 	vaultConfig := api.DefaultConfig()
 	vaultConfig.Address = cfg.VaultAddr
@@ -92,7 +92,7 @@ func NewVaultClient(cfg Config) (*VaultClient, error) {
 	}, nil
 }
 
-// authenticate는 AppRole 인증을 수행하고 토큰을 획득합니다.
+// authenticate는 AppRole 인증을 수행하고 토큰을 획득
 func (vc *VaultClient) authenticate() error {
 	log.Println("--- 🔐 Vault AppRole 인증 시작 ---")
 
@@ -123,7 +123,7 @@ func (vc *VaultClient) authenticate() error {
 	return nil
 }
 
-// readKvSecret은 KV v2 Secret을 조회하고 캐시에 저장합니다.
+// readKvSecret은 KV v2 Secret을 조회하고 캐시에 저장
 func (vc *VaultClient) readKvSecret(path string) {
 	fullPath := fmt.Sprintf("%s/data/%s", vc.config.KVMountPath, path)
 	log.Printf(">>> 🔎 KV Secret 요청 URL: /v1/%s", fullPath)
@@ -154,7 +154,7 @@ func (vc *VaultClient) readKvSecret(path string) {
 	log.Printf("   - ✅ Secret 조회/갱신 성공: %s", path)
 }
 
-// printSecretsCache는 현재 캐시된 시크릿 내용을 출력합니다.
+// printSecretsCache는 현재 캐시된 시크릿 내용을 출력
 func (vc *VaultClient) printSecretsCache() {
 	vc.stateMutex.RLock()
 	defer vc.stateMutex.RUnlock()
@@ -169,7 +169,7 @@ func (vc *VaultClient) printSecretsCache() {
 	log.Println("---------------------------------")
 }
 
-// checkAndRenewToken은 토큰 상태를 확인하고 필요시 갱신합니다.
+// checkAndRenewToken은 토큰 상태를 확인하고 필요시 갱신
 func (vc *VaultClient) checkAndRenewToken() error {
 	vc.stateMutex.RLock()
 	tokenMeta := vc.currentTokenMetadata
@@ -251,7 +251,7 @@ func (vc *VaultClient) checkAndRenewToken() error {
 	return nil
 }
 
-// startScheduledTasks는 KV Secret 갱신 및 토큰 모니터링 스케줄러를 시작합니다.
+// startScheduledTasks는 KV Secret 갱신 및 토큰 모니터링 스케줄러를 시작
 func (vc *VaultClient) startScheduledTasks() {
 	interval := vc.config.RenewalIntervalSeconds
 

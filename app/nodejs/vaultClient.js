@@ -1,5 +1,3 @@
-// 파일명: vaultClient.js
-
 const axios = require('axios');
 const config = require('config');
 const schedule = require('node-schedule');
@@ -22,14 +20,14 @@ let authTimeEpochSeconds = 0;
 let isRenewable = false;
 let secretsCache = {};
 
-/** 현재 토큰의 잔여 TTL을 계산하여 반환합니다. */
+/** 현재 토큰의 잔여 TTL을 계산하여 반환 */
 function getRemainingTtl() {
     const currentTimeEpoch = Math.floor(Date.now() / 1000);
     const elapsed = currentTimeEpoch - authTimeEpochSeconds;
     return leaseDurationSeconds - elapsed;
 }
 
-/** Vault API 호출을 위한 기본 Axios 인스턴스를 생성합니다. */
+/** Vault API 호출을 위한 기본 Axios 인스턴스를 생성 */
 function getVaultClient(token = null) {
     const headers = {
         'Content-Type': 'application/json',

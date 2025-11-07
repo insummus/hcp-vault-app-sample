@@ -3,7 +3,6 @@ package com.example.vault.client
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
-// import io.github.microutils.kotlin.logging.KotlinLogging // 빌드 오류 우회를 위해 제거됨
 import kotlinx.coroutines.*
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
@@ -16,7 +15,6 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.math.max
 
-// 로깅 라이브러리 대신 표준 출력 사용 (Unresolved reference 오류 우회)
 private val log = object {
     fun info(message: () -> String) = println("[INFO] VaultClient: ${message()}")
     fun error(e: Throwable? = null, message: () -> String) = System.err.println("[ERROR] VaultClient: ${message()}. Stack: ${e?.message ?: ""}")

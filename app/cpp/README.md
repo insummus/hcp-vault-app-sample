@@ -2,6 +2,7 @@
 ## 디렉토리 구조
 ```
 cpp/
+├── README.md
 ├── CMakeLists.txt       # CMake 빌드 설정 파일 (종속성 정의 포함)
 ├── config.properties    # Vault 접속 정보 및 설정 변수
 └── src/

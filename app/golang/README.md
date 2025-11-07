@@ -1,11 +1,13 @@
 # Golang
 ## 디렉토리 구조
 ```
-golang
-├── config.ini           # Vault 접속 정보 및 스케줄링 설정 파일
-├── main.go              # 메인 Vault 클라이언트 로직 (인증, 갱신, Secret 조회 포함)
-├── go.mod               # Go 모듈 및 종속성 정의
-└── go.sum               # 종속성 체크섬 파일
+golang/
+├── README.md
+└── src
+    ├── config.ini           # Vault 접속 정보 및 스케줄링 설정 파일
+    ├── main.go              # 메인 Vault 클라이언트 로직 (인증, 갱신, Secret 조회 포함)
+    ├── go.mod               # Go 모듈 및 종속성 정의
+    └── go.sum               # 종속성 체크섬 파일
 ```
 
 ## 환경 구성

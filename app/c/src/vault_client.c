@@ -1,5 +1,3 @@
-// 파일명: src/vault_client.c
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -384,8 +382,7 @@ int vault_read_secret() {
                         const char *key;
                         json_t *value;
                         
-                        // <<<<<<<<<<<<<<<<< 수정된 부분: 버전 파싱 및 출력 >>>>>>>>>>>>>>>>>
-                        // 버전은 정수(Integer)로 전송되므로, long으로 읽어와 문자열로 변환합니다.
+                        // 버전은 정수(Integer)로 전송되므로, long으로 읽어와 문자열로 변환
                         char version_str[16] = {0}; 
                         if (metadata) {
                             json_t *version_node = json_object_get(metadata, "version");
@@ -402,8 +399,6 @@ int vault_read_secret() {
                             printf(" (Version: %s)", version_str);
                         }
                         printf("\n");
-                        // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-
                         printf("    - Data:\n");
 
                         json_object_foreach(secret_data, key, value) {

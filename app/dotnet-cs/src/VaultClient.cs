@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using System.Threading;
 using Microsoft.Extensions.Configuration;
 using System.IO;
-using System.Linq; // ⬅️ 추가: Distinct() 사용을 위해
+using System.Linq; 
 
 namespace NewVaultClientDotnet;
 
@@ -17,7 +17,7 @@ public class VaultClient
     private readonly VaultConfig _config;
     private readonly HttpClient _httpClient;
 
-    // Vault 상태 변수 (volatile long 오류 수정 완료)
+    // Vault 상태 변수 
     private volatile string _currentToken = string.Empty;
     private long _leaseDurationSeconds = 0; 
     private long _authTimeEpochSeconds = 0; 
@@ -30,7 +30,6 @@ public class VaultClient
     {
         _config = config;
         _httpClient = new HttpClient { BaseAddress = new Uri(_config.Addr) };
-        // ❌ Content-Type 헤더 설정 제거 (헤더 오용 오류 수정)
     }
 
     private long GetRemainingTtl()
@@ -231,7 +230,6 @@ public class VaultClient
 
         // 2. KV Secret 데이터 갱신 실행
         Console.WriteLine("\n--- ♻️ KV Secrets 갱신 스케줄러 실행 ---");
-        // ⬅️ 수정: .Distinct()를 사용하여 중복 경로 요청을 방지합니다.
         foreach (var path in _config.KvSecretsPaths.Distinct())
         {
             await ReadKvSecretAsync(path);
@@ -262,7 +260,7 @@ internal static class Program
             await client.AuthenticateAsync();
             
             Console.WriteLine("\n--- 🔎 초기 KV Secrets 조회 시작 ---");
-            foreach (var path in vaultConfig.KvSecretsPaths.Distinct()) // ⬅️ 초기 로드 시에도 중복 방지
+            foreach (var path in vaultConfig.KvSecretsPaths.Distinct()) // ⬅️ 초기 로드 시 중복 방지
             {
                 await client.ReadKvSecretAsync(path);
             }

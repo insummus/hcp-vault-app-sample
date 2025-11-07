@@ -2,6 +2,7 @@
 ## 디렉토리 구조
 ```
 c/
+├── README.md
 ├── Makefile             # 빌드 명령 정의 (src 경로 포함)
 ├── config.ini           # 설정 파일
 └── src
