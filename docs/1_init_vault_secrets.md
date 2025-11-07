@@ -57,6 +57,7 @@ vault write -namespace="${VAULT_NAMESPACE}" auth/approle/role/"${VAULT_APPROLE_R
 vault read -namespace="${VAULT_NAMESPACE}" auth/approle/role/"${VAULT_APPROLE_ROLENAME}"/role-id >> approle_id.txt
 vault write -namespace="${VAULT_NAMESPACE}" -f auth/approle/role/"${VAULT_APPROLE_ROLENAME}"/secret-id >> approle_id.txt
 
+# approle login
 
-
+vault write -namespace="${VAULT_NAMESPACE}" auth/approle/login role_id=xxxx secret_id=xxx
 ```

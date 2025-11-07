@@ -94,7 +94,7 @@ gradle clean installDist
 
 # 3. 실행
 # installDist로 생성된 실행 스크립트를 사용하여 애플리케이션을 실행합니다.
-./build/install/vault-client-kotlin/bin/vault-client-kotlin
+./build/install/java-kotlin/bin/java-kotlin
 
 # 또는 build/libs에 생성된 JAR 파일을 직접 실행할 수도 있습니다.
 # JAR 파일명은 프로젝트 버전(1.0-SNAPSHOT)에 따라 달라질 수 있습니다.
